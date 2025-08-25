@@ -161,7 +161,7 @@ def detect_bird(screen):
     return (x, y, w, h), mask
 
 
-def process_frame(frame):
+def process_frame(frame, safety_margin=0):
     global HSV_dict, floor_y
 
     # Detect floor y-position if not already detected
@@ -173,7 +173,7 @@ def process_frame(frame):
             print("Floor y-position not detected yet.")
             return
         
-    pipes, pipe_mask = process_pipes(frame, floor_y)
+    pipes, pipe_mask = process_pipes(frame, floor_y, safety_margin)
     bird, bird_mask = detect_bird(frame)
 
     return (floor_y, pipes, bird), (pipe_mask, bird_mask)
