@@ -8,38 +8,39 @@ import time
 import threading
 import keyboard
 from collections import deque
+from utils import *
 
-playing = False  # Global variable to track whether the bot is active
+# --- Tuning parameters for the controller ---
+
+# How far into the future (ms) we predict the bird's position 
+# using current velocity. Larger values → earlier flaps, 
+# smaller values → reacts later.
+FUTURE_BIRD_MS = 200
+
+# How many pixels past the last pipe the bird has to be to
+# consider the pipe behind it "passed" and switch to the next.
+# Value of 0 will make it fail when next pipe opening is above
+# current one, making it flap repeatedly, so this add a "wait"
+PASSED_PIPE_DELAY_PX = 10
+
+# When the game runs very fast, frames are captured quickly,
+# and the bird moved only a little bit, making velocity noisy.
+# This makes it compare current frame against the last N frames.
+MAX_FRAME_VELOCITY_ESTIMATOR = 5
+
+# Number of seconds of cooldown between flaps
+# Otherwise it will flap way too rapidly
+FLAP_COOLDOWN_S = 0.05
+
+# --------------------------------------------
+
+vel_est = VelocityEstimator(maxlen=MAX_FRAME_VELOCITY_ESTIMATOR)
+GLOBAL_bird_line = None    # Bird bottom line passed to action thread  (SHARED BETWEEN THREADS)
+GLOBAL_pipe_line = None    # Pipe safe gap bottom passed to action thread  (SHARED BETWEEN THREADS)
+
 lock = threading.Lock()
-
-class VelocityEstimator:
-    def __init__(self, maxlen=5):
-        self.history = deque(maxlen=maxlen)  # stores (timestamp, y)
-
-    def update(self, y, t=None):
-        """Add a new position with timestamp t (default: now)."""
-        if t is None:
-            t = time.time()
-        self.history.append((t, y))
-
-    def get_velocity(self):
-        """Return (velocity_px_per_s, timestamp)."""
-        if len(self.history) < 2:
-            return 0.0, None
-
-        # use oldest and newest for smoothing
-        t0, y0 = self.history[0]
-        t1, y1 = self.history[-1]
-
-        dt = t1 - t0
-        if dt <= 0:
-            return 0.0, t1
-
-        v = (y1 - y0) / dt  # px/sec (positive = downward)
-        return v, t1
-    
-vel_est = VelocityEstimator(maxlen=5)
-    
+pyautogui.PAUSE = 0.1
+playing = False # Global variable to track whether the bot is active
 
 def toggle_playing():
     global playing
@@ -47,15 +48,8 @@ def toggle_playing():
     print("Playing:" if playing else "Paused")
 keyboard.add_hotkey("s", toggle_playing)
 
-bird_line_global = None
-last_bird_line_global = None
-next_pipe_line_global = None
-
-
-pyautogui.PAUSE = 0.1
 def click():
-    #pyautogui.click()
-    pass
+    pyautogui.click()
 
 
 def detect_next_pipe(pipes, bird):
@@ -73,15 +67,8 @@ def detect_next_pipe(pipes, bird):
     return next_pipe
 
 
-def render_frame(screen, mask, game_FPS, counter, time_ms):
-    cv2.setWindowTitle("GameFrame", f"Game FPS: {game_FPS:.2f} |\
-                        Frame Counter: {counter:.0f} | Time (ms): {time_ms:.0f}")
-    cv2.imshow("GameMask", mask)
-    cv2.imshow("GameFrame", screen)
-
-
 def track_vision(self, screen, game_FPS, counter, time_ms):
-    global next_pipe_line_global, bird_line_global, playing, last_bird_line_global, vel_est
+    global vel_est, GLOBAL_bird_line, GLOBAL_pipe_line, FUTURE_BIRD_MS, PASSED_PIPE_DELAY_PX
 
     objects, masks = process_frame(screen, safety_margin=20)
     floor_y, pipes, bird = objects
@@ -102,55 +89,39 @@ def track_vision(self, screen, game_FPS, counter, time_ms):
         next_pipe_line = next_pipe.syb
     
     bird_line = bird[1] + bird[3]
-    
-    cv2.line(screen, (0, next_pipe_line), (screen.shape[1], next_pipe_line), (255, 0, 0), 2)
-    cv2.line(screen, (0, bird_line), (screen.shape[1], bird_line), (0, 0, 255), 2)
-
-
     bird_velocity, _ = vel_est.get_velocity()
-    cv2.putText(
-        screen,
-        f"Velocity: {bird_velocity*1000:.2f} px/s",
-        (10, 30),               # position (x, y)
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.8,                    # font scale
-        (0, 255, 0),            # color (green)
-        2                       # thickness
-    )
-    print(f"Velocity: {bird_velocity*1000:.2f} px/s")
-
-    render_frame(screen, mask, game_FPS, counter, time_ms)
+    bird_line_pred = (int)(bird_line + bird_velocity * FUTURE_BIRD_MS)
 
     with lock:
-        last_bird_line_global = bird_line_global
-        bird_line_global = (time_ms, bird_line)
-        next_pipe_line_global = next_pipe_line
-        vel_est.update(bird_line/2, time_ms)
+        GLOBAL_bird_line = bird_line_pred
+        GLOBAL_pipe_line = next_pipe_line
+    
+    vel_est.update(bird_line/2, time_ms)
+    
+    cv2.line(screen, (0, next_pipe_line), (screen.shape[1], next_pipe_line), (255, 0, 0), 2)
+    cv2.line(screen, (0, bird_line_pred), (screen.shape[1], bird_line_pred), (0, 0, 255), 2)
+    render_frame(screen, mask, game_FPS, counter, time_ms)
        
 
 def take_action():
-    global next_pipe_line_global, bird_line_global, playing, last_bird_line_global, vel_est
+    global GLOBAL_bird_line, GLOBAL_pipe_line, FLAP_COOLDOWN_S
     while True:
         if not playing:
             time.sleep(1)
             continue
 
-        if next_pipe_line_global is None or bird_line_global is None:
+        if GLOBAL_bird_line is None or GLOBAL_pipe_line is None:
             time.sleep(0.05)
             continue
 
         with lock:
-            bird_line = bird_line_global
-            next_pipe_line = next_pipe_line_global
-            velocity, _ = vel_est.get_velocity()
+            bird_line = GLOBAL_bird_line
+            pipe_line = GLOBAL_pipe_line
 
-
-        if bird_line[1] >= next_pipe_line:
+        if bird_line >= pipe_line:
             click()
 
-        time.sleep(0.05)
-
-
+        time.sleep(FLAP_COOLDOWN_S)
 
 
 if __name__ == "__main__":
