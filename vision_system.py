@@ -90,6 +90,7 @@ def detect_pipes(screen, floor_y):
 
     # Make everything under the floor black
     mask[floor_y:, :] = 0
+    #cv2.rectangle(mask, (200, 150), (400, 280), 0, thickness=-1)  #DEBUG
 
     # Find contours of the pipes
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -103,6 +104,32 @@ def detect_pipes(screen, floor_y):
     return pipe_positions, mask
 
 
+def group_pipes_by_x(pipes, x_tolerance=20):
+    if not pipes:
+        return []
+
+    # Sort pipes left to right
+    pipes.sort(key=lambda p: p[0])  # sort by x
+
+    groups = []
+    current_group = [pipes[0]]
+
+    for i in range(1, len(pipes)):
+        x, y, w, h = pipes[i]
+        prev_x, prev_y, prev_w, prev_h = pipes[i - 1]
+
+        # If this pipe is close in X to the previous one, group them
+        if abs(x - prev_x) < x_tolerance:
+            current_group.append(pipes[i])
+        else:
+            # Start a new group
+            groups.append(current_group)
+            current_group = [pipes[i]]
+
+    groups.append(current_group)  # add the last group
+    return groups
+
+
 # Create a list of pipes by detecting and connecting segments
 def process_pipes(screen, floor_y, safety_margin=1):
     pipes, mask = detect_pipes(screen, floor_y)
@@ -110,25 +137,26 @@ def process_pipes(screen, floor_y, safety_margin=1):
         return [], mask
     
     # Connect pipe segments that are above each other on the Y axis
-    pipes.sort(key=lambda p: p[1])  # Sort by y position so that we can connect top and bottom segments 
     connected_pipes = []
-    skip_indices = set()
-    for i in range(len(pipes)):
-        if i in skip_indices:
-            continue
-        x, y, w, h = pipes[i]
-        # Look for a bottom segment that is below this top segment and close in x position
-        for j in range(i + 1, len(pipes)):
-            if j in skip_indices:
-                continue
-            x2, y2, w2, h2 = pipes[j]
-            if abs(x - x2) < 20 and y2 > y:  # Close in x and below in y
-                # Found a matching bottom segment
-                syt = y + h + safety_margin  # Safe y-top
-                syb = y2 - safety_margin     # Safe y-bottom
-                connected_pipes.append(pipe(x, y, w, (y2 + h2) - y, syt, syb))
-                skip_indices.add(j)
-                break
+    pipe_groups = group_pipes_by_x(pipes)
+    for group in pipe_groups:
+        if len(group) < 2:
+            pass
+
+        # Pick top and bottom segments in the group
+        top = min(group, key=lambda p: p[1])     # smallest y = top pipe
+        bottom = max(group, key=lambda p: p[1])  # largest y = bottom pipe
+
+        x1, y1, w1, h1 = top
+        x2, y2, w2, h2 = bottom
+
+        # Safe zones
+        syt = y1 + h1 + safety_margin
+        syb = y2 - safety_margin
+
+        # Create pipe object
+        connected_pipes.append(pipe(x1, y1, w1, (y2 + h2) - y1, syt, syb))
+
 
     return connected_pipes, mask
 
@@ -171,7 +199,7 @@ def process_frame(frame, safety_margin=0):
             print(f"Detected floor y-position: {floor_y}")
         else:
             print("Floor y-position not detected yet.")
-            return
+            return None, None
         
     pipes, pipe_mask = process_pipes(frame, floor_y, safety_margin)
     bird, bird_mask = detect_bird(frame)

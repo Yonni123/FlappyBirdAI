@@ -37,7 +37,7 @@ MAX_FRAME_VELOCITY_ESTIMATOR = 5
 FLAP_COOLDOWN_S = 0.05
 
 # Make the pipe openings "smaller" for safety
-PIPE_OPENING_MARGINS = 5
+PIPE_OPENING_MARGINS = 10
 
 # --------------------------------------------
 
@@ -56,14 +56,11 @@ def toggle_playing():
 keyboard.add_hotkey("s", toggle_playing)
 
 def click():
-    global FLAP_COOLDOWN_S
     pyautogui.click()
     time.sleep(FLAP_COOLDOWN_S)
 
 
 def detect_next_pipe(pipes, bird):
-    global PASSED_PIPE_DELAY_PX
-
     bird_x, _, bird_w, _ = bird
     bird_x = bird_x + bird_w    # We want the right corner of the bird
     bird_x -= PASSED_PIPE_DELAY_PX  # Make it think we are "behind"
@@ -80,7 +77,7 @@ def detect_next_pipe(pipes, bird):
 
 
 def track_vision(self, screen, game_FPS, counter, time_ms):
-    global vel_est, GLOBAL_bird_line, GLOBAL_pipe_line, FUTURE_BIRD_MS, BIRD_SPEED_CAP, PIPE_OPENING_MARGINS
+    global vel_est, GLOBAL_bird_line, GLOBAL_pipe_line
 
     objects, masks = process_frame(screen, safety_margin=PIPE_OPENING_MARGINS)
     if objects is None:
@@ -148,6 +145,6 @@ def take_action():
 
 if __name__ == "__main__":
     action_thread = threading.Thread(target=take_action, daemon=True)
-    game = GameWrapper(monitor_index=0, trim=False)
+    game = GameWrapper(monitor_index=0, trim=True)
     action_thread.start()
     game.play(track_vision)
