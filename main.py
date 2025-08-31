@@ -15,13 +15,17 @@ from utils import *
 # How far into the future (ms) we predict the bird's position 
 # using current velocity. Larger values → earlier flaps, 
 # smaller values → reacts later.
-FUTURE_BIRD_MS = 200
+FUTURE_BIRD_MS = 160
+
+# Max speed for the bird in pixels/s. This is needed to filter out
+# high speeds that makes the bird flap early.
+BIRD_SPEED_CAP = 200
 
 # How many pixels past the last pipe the bird has to be to
 # consider the pipe behind it "passed" and switch to the next.
 # Value of 0 will make it fail when next pipe opening is above
 # current one, making it flap repeatedly, so this add a "wait"
-PASSED_PIPE_DELAY_PX = 10
+PASSED_PIPE_DELAY_PX = 50
 
 # When the game runs very fast, frames are captured quickly,
 # and the bird moved only a little bit, making velocity noisy.
@@ -31,6 +35,9 @@ MAX_FRAME_VELOCITY_ESTIMATOR = 5
 # Number of seconds of cooldown between flaps
 # Otherwise it will flap way too rapidly
 FLAP_COOLDOWN_S = 0.05
+
+# Make the pipe openings "smaller" for safety
+PIPE_OPENING_MARGINS = 5
 
 # --------------------------------------------
 
@@ -49,12 +56,17 @@ def toggle_playing():
 keyboard.add_hotkey("s", toggle_playing)
 
 def click():
+    global FLAP_COOLDOWN_S
     pyautogui.click()
+    time.sleep(FLAP_COOLDOWN_S)
 
 
 def detect_next_pipe(pipes, bird):
+    global PASSED_PIPE_DELAY_PX
+
     bird_x, _, bird_w, _ = bird
     bird_x = bird_x + bird_w    # We want the right corner of the bird
+    bird_x -= PASSED_PIPE_DELAY_PX  # Make it think we are "behind"
     
     # Filter only pipes that are ahead of the bird (right side of bird)
     next_pipes = [p for p in pipes if p.x + p.w > bird_x]
@@ -68,11 +80,18 @@ def detect_next_pipe(pipes, bird):
 
 
 def track_vision(self, screen, game_FPS, counter, time_ms):
-    global vel_est, GLOBAL_bird_line, GLOBAL_pipe_line, FUTURE_BIRD_MS, PASSED_PIPE_DELAY_PX
+    global vel_est, GLOBAL_bird_line, GLOBAL_pipe_line, FUTURE_BIRD_MS, BIRD_SPEED_CAP, PIPE_OPENING_MARGINS
 
-    objects, masks = process_frame(screen, safety_margin=20)
+    objects, masks = process_frame(screen, safety_margin=PIPE_OPENING_MARGINS)
+    if objects is None:
+        raise RuntimeError(
+            "Could not detect floor, please make sure the game is selected.\n"
+            "If the game is selected properly, please tweak the HSV value thresholds (HSV_dict) in vision_system.py"
+        )
+    
     floor_y, pipes, bird = objects
-    mask = cv2.bitwise_or(masks[0], masks[1])
+    #mask = cv2.bitwise_or(masks[0], masks[1])
+    mask = masks[0]
     screen = draw_screen_info(screen, floor_y, pipes, bird)
 
     if not playing:
@@ -90,6 +109,8 @@ def track_vision(self, screen, game_FPS, counter, time_ms):
     
     bird_line = bird[1] + bird[3]
     bird_velocity, _ = vel_est.get_velocity()
+
+    bird_velocity = min(bird_velocity, (BIRD_SPEED_CAP/1000))
     bird_line_pred = (int)(bird_line + bird_velocity * FUTURE_BIRD_MS)
 
     with lock:
@@ -104,7 +125,7 @@ def track_vision(self, screen, game_FPS, counter, time_ms):
        
 
 def take_action():
-    global GLOBAL_bird_line, GLOBAL_pipe_line, FLAP_COOLDOWN_S
+    global GLOBAL_bird_line, GLOBAL_pipe_line
     while True:
         if not playing:
             time.sleep(1)
@@ -120,12 +141,13 @@ def take_action():
 
         if bird_line >= pipe_line:
             click()
+            continue
 
-        time.sleep(FLAP_COOLDOWN_S)
+        time.sleep(0.01)
 
 
 if __name__ == "__main__":
     action_thread = threading.Thread(target=take_action, daemon=True)
-    game = GameWrapper(monitor_index=0, trim=True)
+    game = GameWrapper(monitor_index=0, trim=False)
     action_thread.start()
     game.play(track_vision)
