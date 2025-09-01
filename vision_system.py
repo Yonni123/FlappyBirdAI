@@ -84,13 +84,14 @@ def detect_floor_y_position(screen, screen_w):
 def detect_pipes(screen, floor_y):
     mask = segment_frame(screen, "pipes")
 
-    # Make the mast a little bigger
-    kernel = np.ones((5, 5), np.uint8)
-    mask = cv2.dilate(mask, kernel, iterations=1)
-
     # Make everything under the floor black
     mask[floor_y:, :] = 0
-    #cv2.rectangle(mask, (200, 150), (400, 280), 0, thickness=-1)  #DEBUG
+
+    # Make the mast a little bigger
+    kernel = np.ones((5, 5), np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    
+    cv2.rectangle(mask, (200, 150), (400, 280), 0, thickness=-1)  #DEBUG
 
     # Find contours of the pipes
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)

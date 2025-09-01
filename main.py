@@ -19,7 +19,7 @@ FUTURE_BIRD_MS = 160
 
 # Max speed for the bird in pixels/s. This is needed to filter out
 # high speeds that makes the bird flap early.
-BIRD_SPEED_CAP = 200
+BIRD_SPEED_CAP = 220
 
 # How many pixels past the last pipe the bird has to be to
 # consider the pipe behind it "passed" and switch to the next.
@@ -34,10 +34,10 @@ MAX_FRAME_VELOCITY_ESTIMATOR = 5
 
 # Number of seconds of cooldown between flaps
 # Otherwise it will flap way too rapidly
-FLAP_COOLDOWN_S = 0.05
+FLAP_COOLDOWN_S = 0.02
 
 # Make the pipe openings "smaller" for safety
-PIPE_OPENING_MARGINS = 10
+PIPE_OPENING_MARGINS = 15
 
 # --------------------------------------------
 
@@ -87,8 +87,7 @@ def track_vision(self, screen, game_FPS, counter, time_ms):
         )
     
     floor_y, pipes, bird = objects
-    #mask = cv2.bitwise_or(masks[0], masks[1])
-    mask = masks[0]
+    mask = cv2.bitwise_or(masks[0], masks[1])
     screen = draw_screen_info(screen, floor_y, pipes, bird)
 
     if not playing:
