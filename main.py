@@ -98,7 +98,7 @@ def track_vision(self, screen, game_FPS, counter, time_ms):
         render_frame(screen, mask, game_FPS, counter, time_ms)
         return    
     
-    next_pipe_line = floor_y - 10
+    next_pipe_line = floor_y - PIPE_OPENING_MARGINS # Default to floor if no pipes
     next_pipe = detect_next_pipe(pipes, bird)
     if next_pipe:
         next_pipe_line = next_pipe.syb

@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+from utils import pipe
 
 # GLOBALS
 HSV_dict = {
@@ -7,18 +8,6 @@ HSV_dict = {
     "pipes": (np.array([33, 90, 106]), np.array([48, 200, 255]))
 }
 floor_y = None
-
-
-class pipe:
-    def __init__(self, x, y, w, h, syt, syb):   # Safe y-top, Safe y-bottom
-        self.x = x
-        self.y = y
-        self.w = w
-        self.h = h
-        self.syt = syt
-        self.syb = syb
-        self.center = (x + w // 2, y + h // 2)
-
 
 def segment_frame(frame, target):
     global HSV_dict
@@ -91,7 +80,7 @@ def detect_pipes(screen, floor_y):
     kernel = np.ones((5, 5), np.uint8)
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
     
-    cv2.rectangle(mask, (200, 150), (400, 280), 0, thickness=-1)  #DEBUG
+    #cv2.rectangle(mask, (200, 150), (400, 280), 0, thickness=-1)  #DEBUG
 
     # Find contours of the pipes
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -145,11 +134,17 @@ def process_pipes(screen, floor_y, safety_margin=1):
             pass
 
         # Pick top and bottom segments in the group
-        top = min(group, key=lambda p: p[1])     # smallest y = top pipe
-        bottom = max(group, key=lambda p: p[1])  # largest y = bottom pipe
+        lst = sorted(group, key=lambda p: p[1], reverse=True)
+        bottom = lst[0]
+        top = lst[1] if len(lst) > 1 else lst[0]
 
         x1, y1, w1, h1 = top
         x2, y2, w2, h2 = bottom
+
+        # Make sure top extends to the top of the screen
+        # When score becomes big, it might cut top part in half
+        h1 += y1
+        y1 = 0
 
         # Safe zones
         syt = y1 + h1 + safety_margin

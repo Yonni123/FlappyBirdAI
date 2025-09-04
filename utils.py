@@ -27,7 +27,17 @@ class VelocityEstimator:
 
         v = (y1 - y0) / dt  # px/sec (positive = downward)
         return v, t1
-    
+
+
+class pipe:
+    def __init__(self, x, y, w, h, syt, syb):   # Safe y-top, Safe y-bottom
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+        self.syt = syt
+        self.syb = syb
+        self.center = (x + w // 2, y + h // 2)
 
 
 def render_frame(screen, mask, game_FPS, counter, time_ms):
