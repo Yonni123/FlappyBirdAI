@@ -37,7 +37,17 @@ MAX_FRAME_VELOCITY_ESTIMATOR = 5
 FLAP_COOLDOWN_S = 0.02
 
 # Make the pipe openings "smaller" for safety
-PIPE_OPENING_MARGINS = 15
+PIPE_OPENING_MARGINS = 18
+
+# Pipe speed relative to screen width (calibrate if needed)
+# To get in pixels/s, multiply by screen width
+PIPE_SPEED = 0.438
+
+# Gravity relative to screen height (calibrate if needed)
+# To get in pixels/s², multiply by screen height
+GRAVITY = 3.01
+
+IMPULSE = 1000 # px / s impulse when flapping
 
 # --------------------------------------------
 
@@ -102,12 +112,16 @@ def track_vision(self, screen, game_FPS, counter, time_ms):
     next_pipe = detect_next_pipe(pipes, bird)
     if next_pipe:
         next_pipe_line = next_pipe.syb
+        birdx = bird[0] + bird[3]
+        distance_to_pipe = next_pipe.x - birdx
     
     bird_line = bird[1] + bird[3]
     bird_velocity, _ = vel_est.get_velocity()
 
     bird_velocity = min(bird_velocity, (BIRD_SPEED_CAP/1000))
     bird_line_pred = (int)(bird_line + bird_velocity * FUTURE_BIRD_MS)
+
+    
 
     with lock:
         GLOBAL_bird_line = bird_line_pred
