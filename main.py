@@ -7,7 +7,6 @@ import pyautogui
 import time
 import threading
 import keyboard
-from collections import deque
 from utils import *
 
 # --- Tuning parameters for the controller ---
@@ -19,27 +18,27 @@ FUTURE_BIRD_MS = 160
 
 # Max speed for the bird in pixels/s. This is needed to filter out
 # high speeds that makes the bird flap early.
-BIRD_SPEED_CAP = 240
+BIRD_SPEED_CAP = 255
 
-BIRD_LINE_P = 1.15  # Proportional gain for bird line control
+BIRD_LINE_P = 0.75  # Proportional gain for bird line control
 
 # How many pixels past the last pipe the bird has to be to
 # consider the pipe behind it "passed" and switch to the next.
 # Value of 0 will make it fail when next pipe opening is above
 # current one, making it flap repeatedly, so this add a "wait"
-PASSED_PIPE_DELAY_PX = 51
+PASSED_PIPE_DELAY_PX = 55
 
 # When the game runs very fast, frames are captured quickly,
 # and the bird moved only a little bit, making velocity noisy.
 # This makes it compare current frame against the last N frames.
-MAX_FRAME_VELOCITY_ESTIMATOR = 5
+MAX_FRAME_VELOCITY_ESTIMATOR = 3
 
 # Number of seconds of cooldown between flaps
 # Otherwise it will flap way too rapidly
-FLAP_COOLDOWN_S = 0.033
+FLAP_COOLDOWN_S = 0.010
 
 # Make the pipe openings "smaller" for safety
-PIPE_OPENING_MARGINS = 25
+PIPE_OPENING_MARGINS = 27
 
 # Pipe speed relative to screen width (calibrate if needed)
 # To get in pixels/s, multiply by screen width
@@ -47,7 +46,7 @@ PIPE_SPEED = 0.438
 
 BIRD_FLAP_DISTANCE_PX = 100  # How many pixels the bird moves up when it flaps
 
-BIRD_TOP_LIMIT_EXPIRE_PX = 70  # When we are this many pixels from pipe, remove top limit
+BIRD_TOP_LIMIT_EXPIRE_PX = 76  # When we are this many pixels from pipe, remove top limit
 
 TOP_LIMIT_OFFSET_PX = -5  # How many pixels above the pipe opening to set the top limit
 
@@ -60,7 +59,7 @@ GLOBAL_top_limit = None    # Top limit for bird (SHARED BETWEEN THREADS)
 GLOBAL_distance_to_pipe = None  # Distance to next pipe (SHARED BETWEEN THREADS)
 
 lock = threading.Lock()
-pyautogui.PAUSE = 0.1
+pyautogui.PAUSE = 0.05
 playing = False # Global variable to track whether the bot is active
 
 def toggle_playing():
@@ -70,8 +69,9 @@ def toggle_playing():
 keyboard.add_hotkey("s", toggle_playing)
 
 def click():
-    pyautogui.click()
+    pyautogui.mouseDown()
     time.sleep(FLAP_COOLDOWN_S)
+    pyautogui.mouseUp()
 
 
 def detect_next_pipe(pipes, bird):
@@ -121,7 +121,7 @@ def track_vision(self, screen, game_FPS, counter, time_ms):
         birdx = bird[0] + bird[3]
         distance_to_pipe = next_pipe.x - birdx
         gap_in_pipe = next_pipe.syb / next_pipe.h   # h is the entire height, so syb/h is the gap position (0=top, 1=bottom)
-        if gap_in_pipe < 0.80:
+        if gap_in_pipe < 0.70:
             top_limit = next_pipe.syb + PIPE_OPENING_MARGINS + TOP_LIMIT_OFFSET_PX
 
     bird_line = bird[1] + bird[3]
@@ -184,7 +184,7 @@ def take_action():
 if __name__ == "__main__":
     action_thread = threading.Thread(target=take_action, daemon=True)
     game = GameWrapper(monitor_index=0, trim=True,
-                       game_region={'top': 153, 'left': 19, 'width': 626, 'height': 1117}
+                       game_region={'top': 121, 'left': 56, 'width': 624, 'height': 1114}
     )
     time.sleep(2)
     action_thread.start()
