@@ -31,7 +31,7 @@ def draw_screen_info(frame, floor_y, pipes, bird=None):
         x, y, w, h = p.x, p.y, p.w, p.h
         # Draw bounding boxes
         cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 255), 4)
-        cv2.putText(frame, f"({x},{y})", (x, p.syb - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+        cv2.putText(frame, f"({x},{p.syb})", (x, p.syb - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
         # Draw safe zones
         cv2.line(frame, (x, p.syt), (x + w, p.syt), (0, 0, 255), 4)
         cv2.line(frame, (x, p.syb), (x + w, p.syb), (0, 0, 255), 4)
