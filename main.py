@@ -19,13 +19,15 @@ FUTURE_BIRD_MS = 160
 
 # Max speed for the bird in pixels/s. This is needed to filter out
 # high speeds that makes the bird flap early.
-BIRD_SPEED_CAP = 220
+BIRD_SPEED_CAP = 240
+
+BIRD_LINE_P = 1.15  # Proportional gain for bird line control
 
 # How many pixels past the last pipe the bird has to be to
 # consider the pipe behind it "passed" and switch to the next.
 # Value of 0 will make it fail when next pipe opening is above
 # current one, making it flap repeatedly, so this add a "wait"
-PASSED_PIPE_DELAY_PX = 50
+PASSED_PIPE_DELAY_PX = 51
 
 # When the game runs very fast, frames are captured quickly,
 # and the bird moved only a little bit, making velocity noisy.
@@ -34,26 +36,28 @@ MAX_FRAME_VELOCITY_ESTIMATOR = 5
 
 # Number of seconds of cooldown between flaps
 # Otherwise it will flap way too rapidly
-FLAP_COOLDOWN_S = 0.02
+FLAP_COOLDOWN_S = 0.033
 
 # Make the pipe openings "smaller" for safety
-PIPE_OPENING_MARGINS = 18
+PIPE_OPENING_MARGINS = 25
 
 # Pipe speed relative to screen width (calibrate if needed)
 # To get in pixels/s, multiply by screen width
 PIPE_SPEED = 0.438
 
-# Gravity relative to screen height (calibrate if needed)
-# To get in pixels/s², multiply by screen height
-GRAVITY = 3.01
+BIRD_FLAP_DISTANCE_PX = 100  # How many pixels the bird moves up when it flaps
 
-IMPULSE = 1000 # px / s impulse when flapping
+BIRD_TOP_LIMIT_EXPIRE_PX = 70  # When we are this many pixels from pipe, remove top limit
+
+TOP_LIMIT_OFFSET_PX = -5  # How many pixels above the pipe opening to set the top limit
 
 # --------------------------------------------
 
 vel_est = VelocityEstimator(maxlen=MAX_FRAME_VELOCITY_ESTIMATOR)
 GLOBAL_bird_line = None    # Bird bottom line passed to action thread  (SHARED BETWEEN THREADS)
 GLOBAL_pipe_line = None    # Pipe safe gap bottom passed to action thread  (SHARED BETWEEN THREADS)
+GLOBAL_top_limit = None    # Top limit for bird (SHARED BETWEEN THREADS)
+GLOBAL_distance_to_pipe = None  # Distance to next pipe (SHARED BETWEEN THREADS)
 
 lock = threading.Lock()
 pyautogui.PAUSE = 0.1
@@ -87,7 +91,7 @@ def detect_next_pipe(pipes, bird):
 
 
 def track_vision(self, screen, game_FPS, counter, time_ms):
-    global vel_est, GLOBAL_bird_line, GLOBAL_pipe_line
+    global vel_est, GLOBAL_bird_line, GLOBAL_pipe_line, GLOBAL_top_limit, GLOBAL_distance_to_pipe
 
     objects, masks = process_frame(screen, safety_margin=PIPE_OPENING_MARGINS)
     if objects is None:
@@ -110,27 +114,40 @@ def track_vision(self, screen, game_FPS, counter, time_ms):
     
     next_pipe_line = floor_y - PIPE_OPENING_MARGINS # Default to floor if no pipes
     next_pipe = detect_next_pipe(pipes, bird)
+    distance_to_pipe = 0
+    top_limit = 0  # Default to 0 if no pipes, 0 is top of screen
     if next_pipe:
         next_pipe_line = next_pipe.syb
         birdx = bird[0] + bird[3]
         distance_to_pipe = next_pipe.x - birdx
-    
+        gap_in_pipe = next_pipe.syb / next_pipe.h   # h is the entire height, so syb/h is the gap position (0=top, 1=bottom)
+        if gap_in_pipe < 0.80:
+            top_limit = next_pipe.syb + PIPE_OPENING_MARGINS + TOP_LIMIT_OFFSET_PX
+
     bird_line = bird[1] + bird[3]
     bird_velocity, _ = vel_est.get_velocity()
 
     bird_velocity = min(bird_velocity, (BIRD_SPEED_CAP/1000))
-    bird_line_pred = (int)(bird_line + bird_velocity * FUTURE_BIRD_MS)
-
-    
+    bird_line_pred = (int)(bird_line + bird_velocity * FUTURE_BIRD_MS * BIRD_LINE_P)
 
     with lock:
         GLOBAL_bird_line = bird_line_pred
         GLOBAL_pipe_line = next_pipe_line
+        GLOBAL_distance_to_pipe = distance_to_pipe
+        GLOBAL_top_limit = top_limit
     
     vel_est.update(bird_line/2, time_ms)
     
     cv2.line(screen, (0, next_pipe_line), (screen.shape[1], next_pipe_line), (255, 0, 0), 2)
     cv2.line(screen, (0, bird_line_pred), (screen.shape[1], bird_line_pred), (0, 0, 255), 2)
+
+    # Draw top limit only if we are far from pipe
+    if distance_to_pipe > BIRD_TOP_LIMIT_EXPIRE_PX:
+        cv2.line(screen, (0, top_limit), (screen.shape[1], top_limit), (0, 255, 255), 2)
+
+    # Draw where the bird will be if it flaps now
+    bird_line_after_flap = bird_line - BIRD_FLAP_DISTANCE_PX
+    cv2.line(screen, (0, bird_line_after_flap), (screen.shape[1], bird_line_after_flap), (0, 255, 0), 2)
     render_frame(screen, mask, game_FPS, counter, time_ms)
        
 
@@ -141,23 +158,34 @@ def take_action():
             time.sleep(1)
             continue
 
-        if GLOBAL_bird_line is None or GLOBAL_pipe_line is None:
-            time.sleep(0.05)
+        if GLOBAL_bird_line is None or GLOBAL_pipe_line is None or GLOBAL_top_limit is None or GLOBAL_distance_to_pipe is None:
+            time.sleep(0.01)
             continue
 
         with lock:
             bird_line = GLOBAL_bird_line
             pipe_line = GLOBAL_pipe_line
+            top_limit = GLOBAL_top_limit
+            distance_to_pipe = GLOBAL_distance_to_pipe
 
-        if bird_line >= pipe_line:
-            click()
+        if bird_line < pipe_line:   # Don't flap if we are above the pipe opening (Y is inverted)
+            time.sleep(0.01)
             continue
 
-        time.sleep(0.01)
+        if distance_to_pipe > BIRD_TOP_LIMIT_EXPIRE_PX:
+            bird_line_after_flap = bird_line - BIRD_FLAP_DISTANCE_PX
+            if bird_line_after_flap < top_limit:
+                time.sleep(0.01)
+                continue
+
+        click()
 
 
 if __name__ == "__main__":
     action_thread = threading.Thread(target=take_action, daemon=True)
-    game = GameWrapper(monitor_index=0, trim=True)
+    game = GameWrapper(monitor_index=0, trim=True,
+                       game_region={'top': 153, 'left': 19, 'width': 626, 'height': 1117}
+    )
+    time.sleep(2)
     action_thread.start()
     game.play(track_vision)
