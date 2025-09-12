@@ -14,19 +14,19 @@ from utils import *
 # How far into the future (ms) we predict the bird's position 
 # using current velocity. Larger values → earlier flaps, 
 # smaller values → reacts later.
-FUTURE_BIRD_MS = 160
+FUTURE_BIRD_MS = 165
 
 # Max speed for the bird in pixels/s. This is needed to filter out
 # high speeds that makes the bird flap early.
-BIRD_SPEED_CAP = 255
+BIRD_SPEED_CAP = 270
 
-BIRD_LINE_P = 0.75  # Proportional gain for bird line control
+BIRD_LINE_P = 0.78  # Proportional gain for bird line control
 
 # How many pixels past the last pipe the bird has to be to
 # consider the pipe behind it "passed" and switch to the next.
 # Value of 0 will make it fail when next pipe opening is above
 # current one, making it flap repeatedly, so this add a "wait"
-PASSED_PIPE_DELAY_PX = 55
+PASSED_PIPE_DELAY_PX = 60
 
 # When the game runs very fast, frames are captured quickly,
 # and the bird moved only a little bit, making velocity noisy.
@@ -184,7 +184,7 @@ def take_action():
 if __name__ == "__main__":
     action_thread = threading.Thread(target=take_action, daemon=True)
     game = GameWrapper(monitor_index=0, trim=True,
-                       game_region={'top': 121, 'left': 56, 'width': 624, 'height': 1114}
+                       game_region={'top': 171, 'left': 16, 'width': 626, 'height': 1116}
     )
     time.sleep(2)
     action_thread.start()
