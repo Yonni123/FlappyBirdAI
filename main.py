@@ -26,7 +26,7 @@ BIRD_LINE_P = 0.80  # Proportional gain for bird line control
 # consider the pipe behind it "passed" and switch to the next.
 # Value of 0 will make it fail when next pipe opening is above
 # current one, making it flap repeatedly, so this add a "wait"
-PASSED_PIPE_DELAY_PX = 60
+PASSED_PIPE_DELAY_PX = 57
 
 # When the game runs very fast, frames are captured quickly,
 # and the bird moved only a little bit, making velocity noisy.
