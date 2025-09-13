@@ -46,7 +46,7 @@ PIPE_SPEED = 0.438
 
 BIRD_FLAP_DISTANCE_PX = 100  # How many pixels the bird moves up when it flaps
 
-BIRD_TOP_LIMIT_EXPIRE_PX = 76  # When we are this many pixels from pipe, remove top limit
+BIRD_TOP_LIMIT_EXPIRE_PX = 74  # When we are this many pixels from pipe, remove top limit
 
 TOP_LIMIT_OFFSET_PX = -5  # How many pixels above the pipe opening to set the top limit
 
