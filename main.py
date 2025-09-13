@@ -20,7 +20,7 @@ FUTURE_BIRD_MS = 165
 # high speeds that makes the bird flap early.
 BIRD_SPEED_CAP = 270
 
-BIRD_LINE_P = 0.78  # Proportional gain for bird line control
+BIRD_LINE_P = 0.80  # Proportional gain for bird line control
 
 # How many pixels past the last pipe the bird has to be to
 # consider the pipe behind it "passed" and switch to the next.
@@ -38,7 +38,7 @@ MAX_FRAME_VELOCITY_ESTIMATOR = 3
 FLAP_COOLDOWN_S = 0.010
 
 # Make the pipe openings "smaller" for safety
-PIPE_OPENING_MARGINS = 27
+PIPE_OPENING_MARGINS = 30
 
 # Pipe speed relative to screen width (calibrate if needed)
 # To get in pixels/s, multiply by screen width
@@ -49,6 +49,8 @@ BIRD_FLAP_DISTANCE_PX = 100  # How many pixels the bird moves up when it flaps
 BIRD_TOP_LIMIT_EXPIRE_PX = 76  # When we are this many pixels from pipe, remove top limit
 
 TOP_LIMIT_OFFSET_PX = -5  # How many pixels above the pipe opening to set the top limit
+
+TOP_LIMIT_OFFSET_TOP_PX = 20  # Extra offset when top limit is set by top pipe
 
 # --------------------------------------------
 
@@ -130,6 +132,10 @@ def track_vision(self, screen, game_FPS, counter, time_ms):
     bird_velocity = min(bird_velocity, (BIRD_SPEED_CAP/1000))
     bird_line_pred = (int)(bird_line + bird_velocity * FUTURE_BIRD_MS * BIRD_LINE_P)
 
+    if distance_to_pipe < BIRD_TOP_LIMIT_EXPIRE_PX and next_pipe is not None:
+        top_limit = next_pipe.syt + TOP_LIMIT_OFFSET_TOP_PX
+
+
     with lock:
         GLOBAL_bird_line = bird_line_pred
         GLOBAL_pipe_line = next_pipe_line
@@ -140,10 +146,7 @@ def track_vision(self, screen, game_FPS, counter, time_ms):
     
     cv2.line(screen, (0, next_pipe_line), (screen.shape[1], next_pipe_line), (255, 0, 0), 2)
     cv2.line(screen, (0, bird_line_pred), (screen.shape[1], bird_line_pred), (0, 0, 255), 2)
-
-    # Draw top limit only if we are far from pipe
-    if distance_to_pipe > BIRD_TOP_LIMIT_EXPIRE_PX:
-        cv2.line(screen, (0, top_limit), (screen.shape[1], top_limit), (0, 255, 255), 2)
+    cv2.line(screen, (0, top_limit), (screen.shape[1], top_limit), (0, 255, 255), 2)
 
     # Draw where the bird will be if it flaps now
     bird_line_after_flap = bird_line - BIRD_FLAP_DISTANCE_PX
@@ -172,11 +175,10 @@ def take_action():
             time.sleep(0.01)
             continue
 
-        if distance_to_pipe > BIRD_TOP_LIMIT_EXPIRE_PX:
-            bird_line_after_flap = bird_line - BIRD_FLAP_DISTANCE_PX
-            if bird_line_after_flap < top_limit:
-                time.sleep(0.01)
-                continue
+        bird_line_after_flap = bird_line - BIRD_FLAP_DISTANCE_PX
+        if bird_line_after_flap < top_limit:
+            time.sleep(0.01)
+            continue
 
         click()
 
@@ -184,7 +186,7 @@ def take_action():
 if __name__ == "__main__":
     action_thread = threading.Thread(target=take_action, daemon=True)
     game = GameWrapper(monitor_index=0, trim=True,
-                       game_region={'top': 171, 'left': 16, 'width': 626, 'height': 1116}
+                       game_region={'top': 147, 'left': 33, 'width': 624, 'height': 1114}
     )
     time.sleep(2)
     action_thread.start()
