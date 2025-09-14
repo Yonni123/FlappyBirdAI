@@ -20,7 +20,7 @@ FUTURE_BIRD_MS = 165
 # high speeds that makes the bird flap early.
 BIRD_SPEED_CAP = 270
 
-BIRD_LINE_P = 0.80  # Proportional gain for bird line control
+BIRD_LINE_P = 0.79  # Proportional gain for bird line control
 
 # How many pixels past the last pipe the bird has to be to
 # consider the pipe behind it "passed" and switch to the next.
@@ -35,10 +35,10 @@ MAX_FRAME_VELOCITY_ESTIMATOR = 3
 
 # Number of seconds of cooldown between flaps
 # Otherwise it will flap way too rapidly
-FLAP_COOLDOWN_S = 0.010
+FLAP_COOLDOWN_S = 0.007
 
 # Make the pipe openings "smaller" for safety
-PIPE_OPENING_MARGINS = 30
+PIPE_OPENING_MARGINS = 29
 
 # Pipe speed relative to screen width (calibrate if needed)
 # To get in pixels/s, multiply by screen width
@@ -48,7 +48,7 @@ BIRD_FLAP_DISTANCE_PX = 100  # How many pixels the bird moves up when it flaps
 
 BIRD_TOP_LIMIT_EXPIRE_PX = 74  # When we are this many pixels from pipe, remove top limit
 
-TOP_LIMIT_OFFSET_PX = -5  # How many pixels above the pipe opening to set the top limit
+TOP_LIMIT_OFFSET_PX = 0  # How many pixels above the pipe opening to set the top limit
 
 TOP_LIMIT_OFFSET_TOP_PX = 20  # Extra offset when top limit is set by top pipe
 
