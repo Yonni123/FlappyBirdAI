@@ -35,7 +35,7 @@ MAX_FRAME_VELOCITY_ESTIMATOR = 3
 
 # Number of seconds of cooldown between flaps
 # Otherwise it will flap way too rapidly
-FLAP_COOLDOWN_S = 0.007
+FLAP_COOLDOWN_S = 0.1
 
 # Make the pipe openings "smaller" for safety
 PIPE_OPENING_MARGINS = 29
@@ -46,11 +46,11 @@ PIPE_SPEED = 0.438
 
 BIRD_FLAP_DISTANCE_PX = 100  # How many pixels the bird moves up when it flaps
 
-BIRD_TOP_LIMIT_EXPIRE_PX = 74  # When we are this many pixels from pipe, remove top limit
+BIRD_TOP_LIMIT_EXPIRE_PX = 77  # When we are this many pixels from pipe, remove top limit
 
 TOP_LIMIT_OFFSET_PX = 0  # How many pixels above the pipe opening to set the top limit
 
-TOP_LIMIT_OFFSET_TOP_PX = 20  # Extra offset when top limit is set by top pipe
+TOP_LIMIT_OFFSET_TOP_PX = 95  # Extra offset when top limit is set by top pipe
 
 # --------------------------------------------
 
@@ -61,7 +61,7 @@ GLOBAL_top_limit = None    # Top limit for bird (SHARED BETWEEN THREADS)
 GLOBAL_distance_to_pipe = None  # Distance to next pipe (SHARED BETWEEN THREADS)
 
 lock = threading.Lock()
-pyautogui.PAUSE = 0.05
+pyautogui.PAUSE = FLAP_COOLDOWN_S
 playing = False # Global variable to track whether the bot is active
 
 def toggle_playing():
@@ -71,9 +71,7 @@ def toggle_playing():
 keyboard.add_hotkey("s", toggle_playing)
 
 def click():
-    pyautogui.mouseDown()
-    time.sleep(FLAP_COOLDOWN_S)
-    pyautogui.mouseUp()
+    pyautogui.click()
 
 
 def detect_next_pipe(pipes, bird):
@@ -133,7 +131,7 @@ def track_vision(self, screen, game_FPS, counter, time_ms):
     bird_line_pred = (int)(bird_line + bird_velocity * FUTURE_BIRD_MS * BIRD_LINE_P)
 
     if distance_to_pipe < BIRD_TOP_LIMIT_EXPIRE_PX and next_pipe is not None:
-        top_limit = next_pipe.syt + TOP_LIMIT_OFFSET_TOP_PX
+        top_limit = next_pipe.syb - TOP_LIMIT_OFFSET_TOP_PX
 
 
     with lock:
