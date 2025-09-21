@@ -14,19 +14,21 @@ from utils import *
 # How far into the future (ms) we predict the bird's position 
 # using current velocity. Larger values → earlier flaps, 
 # smaller values → reacts later.
-FUTURE_BIRD_MS = 165
+FUTURE_BIRD_MS = 175
+
+FUTURE_BIRD_OFFSET = 11
 
 # Max speed for the bird in pixels/s. This is needed to filter out
 # high speeds that makes the bird flap early.
-BIRD_SPEED_CAP = 270
+BIRD_SPEED_CAP = 300
 
-BIRD_LINE_P = 0.79  # Proportional gain for bird line control
+BIRD_LINE_P = 0.80  # Proportional gain for bird line control
 
 # How many pixels past the last pipe the bird has to be to
 # consider the pipe behind it "passed" and switch to the next.
 # Value of 0 will make it fail when next pipe opening is above
 # current one, making it flap repeatedly, so this add a "wait"
-PASSED_PIPE_DELAY_PX = 57
+PASSED_PIPE_DELAY_PX = 53
 
 # When the game runs very fast, frames are captured quickly,
 # and the bird moved only a little bit, making velocity noisy.
@@ -35,10 +37,10 @@ MAX_FRAME_VELOCITY_ESTIMATOR = 3
 
 # Number of seconds of cooldown between flaps
 # Otherwise it will flap way too rapidly
-FLAP_COOLDOWN_S = 0.1
+FLAP_COOLDOWN_S = 0.001
 
 # Make the pipe openings "smaller" for safety
-PIPE_OPENING_MARGINS = 29
+PIPE_OPENING_MARGINS = 33
 
 # Pipe speed relative to screen width (calibrate if needed)
 # To get in pixels/s, multiply by screen width
@@ -46,11 +48,11 @@ PIPE_SPEED = 0.438
 
 BIRD_FLAP_DISTANCE_PX = 100  # How many pixels the bird moves up when it flaps
 
-BIRD_TOP_LIMIT_EXPIRE_PX = 77  # When we are this many pixels from pipe, remove top limit
+BIRD_TOP_LIMIT_EXPIRE_PX = 65  # When we are this many pixels from pipe, remove top limit
 
 TOP_LIMIT_OFFSET_PX = 0  # How many pixels above the pipe opening to set the top limit
 
-TOP_LIMIT_OFFSET_TOP_PX = 95  # Extra offset when top limit is set by top pipe
+TOP_LIMIT_OFFSET_TOP_PX = 82  # Extra offset when top limit is set by top pipe
 
 # --------------------------------------------
 
@@ -61,7 +63,7 @@ GLOBAL_top_limit = None    # Top limit for bird (SHARED BETWEEN THREADS)
 GLOBAL_distance_to_pipe = None  # Distance to next pipe (SHARED BETWEEN THREADS)
 
 lock = threading.Lock()
-pyautogui.PAUSE = FLAP_COOLDOWN_S
+pyautogui.PAUSE = 0.05
 playing = False # Global variable to track whether the bot is active
 
 def toggle_playing():
@@ -71,7 +73,9 @@ def toggle_playing():
 keyboard.add_hotkey("s", toggle_playing)
 
 def click():
-    pyautogui.click()
+    pyautogui.mouseDown()
+    time.sleep(FLAP_COOLDOWN_S)
+    pyautogui.mouseUp()
 
 
 def detect_next_pipe(pipes, bird):
@@ -91,7 +95,7 @@ def detect_next_pipe(pipes, bird):
 
 
 def track_vision(self, screen, game_FPS, counter, time_ms):
-    global vel_est, GLOBAL_bird_line, GLOBAL_pipe_line, GLOBAL_top_limit, GLOBAL_distance_to_pipe
+    global vel_est, GLOBAL_bird_line, GLOBAL_pipe_line, GLOBAL_top_limit, GLOBAL_distance_to_pipe, TOP_LIMIT_OFFSET_TOP_PX
 
     objects, masks = process_frame(screen, safety_margin=PIPE_OPENING_MARGINS)
     if objects is None:
@@ -123,16 +127,20 @@ def track_vision(self, screen, game_FPS, counter, time_ms):
         gap_in_pipe = next_pipe.syb / next_pipe.h   # h is the entire height, so syb/h is the gap position (0=top, 1=bottom)
         if gap_in_pipe < 0.70:
             top_limit = next_pipe.syb + PIPE_OPENING_MARGINS + TOP_LIMIT_OFFSET_PX
+        else:
+            top_limit = next_pipe.syb + PIPE_OPENING_MARGINS + TOP_LIMIT_OFFSET_PX - 17 # Extra offset if gap is low cuz of the floor
 
     bird_line = bird[1] + bird[3]
     bird_velocity, _ = vel_est.get_velocity()
 
     bird_velocity = min(bird_velocity, (BIRD_SPEED_CAP/1000))
-    bird_line_pred = (int)(bird_line + bird_velocity * FUTURE_BIRD_MS * BIRD_LINE_P)
+    bird_line_pred = (int)(bird_line + bird_velocity * FUTURE_BIRD_MS * BIRD_LINE_P) + FUTURE_BIRD_OFFSET
 
+    TOP_OFFSET = 6 if bird_velocity < 0 else -6
+    TOP_LIMIT_OFFSET_TOP_PX += TOP_OFFSET
     if distance_to_pipe < BIRD_TOP_LIMIT_EXPIRE_PX and next_pipe is not None:
-        top_limit = next_pipe.syb - TOP_LIMIT_OFFSET_TOP_PX
-
+        top_limit = next_pipe.syt + TOP_LIMIT_OFFSET_TOP_PX
+    TOP_LIMIT_OFFSET_TOP_PX -= TOP_OFFSET
 
     with lock:
         GLOBAL_bird_line = bird_line_pred
