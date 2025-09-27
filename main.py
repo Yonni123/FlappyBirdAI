@@ -7,6 +7,7 @@ import pyautogui
 import time
 import threading
 import keyboard
+from collections import deque
 from utils import *
 
 # --- Tuning parameters for the controller ---
@@ -14,33 +15,31 @@ from utils import *
 # How far into the future (ms) we predict the bird's position 
 # using current velocity. Larger values → earlier flaps, 
 # smaller values → reacts later.
-FUTURE_BIRD_MS = 175
-
-FUTURE_BIRD_OFFSET = 11
+FUTURE_BIRD_MS = 160
 
 # Max speed for the bird in pixels/s. This is needed to filter out
 # high speeds that makes the bird flap early.
-BIRD_SPEED_CAP = 300
+BIRD_SPEED_CAP = 240
 
-BIRD_LINE_P = 0.80  # Proportional gain for bird line control
+BIRD_LINE_P = 1.15  # Proportional gain for bird line control
 
 # How many pixels past the last pipe the bird has to be to
 # consider the pipe behind it "passed" and switch to the next.
 # Value of 0 will make it fail when next pipe opening is above
 # current one, making it flap repeatedly, so this add a "wait"
-PASSED_PIPE_DELAY_PX = 53
+PASSED_PIPE_DELAY_PX = 51
 
 # When the game runs very fast, frames are captured quickly,
 # and the bird moved only a little bit, making velocity noisy.
 # This makes it compare current frame against the last N frames.
-MAX_FRAME_VELOCITY_ESTIMATOR = 3
+MAX_FRAME_VELOCITY_ESTIMATOR = 5
 
 # Number of seconds of cooldown between flaps
 # Otherwise it will flap way too rapidly
-FLAP_COOLDOWN_S = 0.001
+FLAP_COOLDOWN_S = 0.033
 
 # Make the pipe openings "smaller" for safety
-PIPE_OPENING_MARGINS = 33
+PIPE_OPENING_MARGINS = 25
 
 # Pipe speed relative to screen width (calibrate if needed)
 # To get in pixels/s, multiply by screen width
@@ -48,11 +47,9 @@ PIPE_SPEED = 0.438
 
 BIRD_FLAP_DISTANCE_PX = 100  # How many pixels the bird moves up when it flaps
 
-BIRD_TOP_LIMIT_EXPIRE_PX = 65  # When we are this many pixels from pipe, remove top limit
+BIRD_TOP_LIMIT_EXPIRE_PX = 70  # When we are this many pixels from pipe, remove top limit
 
-TOP_LIMIT_OFFSET_PX = 0  # How many pixels above the pipe opening to set the top limit
-
-TOP_LIMIT_OFFSET_TOP_PX = 82  # Extra offset when top limit is set by top pipe
+TOP_LIMIT_OFFSET_PX = -5  # How many pixels above the pipe opening to set the top limit
 
 # --------------------------------------------
 
@@ -63,7 +60,7 @@ GLOBAL_top_limit = None    # Top limit for bird (SHARED BETWEEN THREADS)
 GLOBAL_distance_to_pipe = None  # Distance to next pipe (SHARED BETWEEN THREADS)
 
 lock = threading.Lock()
-pyautogui.PAUSE = 0.05
+pyautogui.PAUSE = 0.1
 playing = False # Global variable to track whether the bot is active
 
 def toggle_playing():
@@ -73,9 +70,8 @@ def toggle_playing():
 keyboard.add_hotkey("s", toggle_playing)
 
 def click():
-    pyautogui.mouseDown()
+    pyautogui.click()
     time.sleep(FLAP_COOLDOWN_S)
-    pyautogui.mouseUp()
 
 
 def detect_next_pipe(pipes, bird):
@@ -95,7 +91,7 @@ def detect_next_pipe(pipes, bird):
 
 
 def track_vision(self, screen, game_FPS, counter, time_ms):
-    global vel_est, GLOBAL_bird_line, GLOBAL_pipe_line, GLOBAL_top_limit, GLOBAL_distance_to_pipe, TOP_LIMIT_OFFSET_TOP_PX
+    global vel_est, GLOBAL_bird_line, GLOBAL_pipe_line, GLOBAL_top_limit, GLOBAL_distance_to_pipe
 
     objects, masks = process_frame(screen, safety_margin=PIPE_OPENING_MARGINS)
     if objects is None:
@@ -125,22 +121,14 @@ def track_vision(self, screen, game_FPS, counter, time_ms):
         birdx = bird[0] + bird[3]
         distance_to_pipe = next_pipe.x - birdx
         gap_in_pipe = next_pipe.syb / next_pipe.h   # h is the entire height, so syb/h is the gap position (0=top, 1=bottom)
-        if gap_in_pipe < 0.70:
+        if gap_in_pipe < 0.80:
             top_limit = next_pipe.syb + PIPE_OPENING_MARGINS + TOP_LIMIT_OFFSET_PX
-        else:
-            top_limit = next_pipe.syb + PIPE_OPENING_MARGINS + TOP_LIMIT_OFFSET_PX - 17 # Extra offset if gap is low cuz of the floor
 
     bird_line = bird[1] + bird[3]
     bird_velocity, _ = vel_est.get_velocity()
 
     bird_velocity = min(bird_velocity, (BIRD_SPEED_CAP/1000))
-    bird_line_pred = (int)(bird_line + bird_velocity * FUTURE_BIRD_MS * BIRD_LINE_P) + FUTURE_BIRD_OFFSET
-
-    TOP_OFFSET = 6 if bird_velocity < 0 else -6
-    TOP_LIMIT_OFFSET_TOP_PX += TOP_OFFSET
-    if distance_to_pipe < BIRD_TOP_LIMIT_EXPIRE_PX and next_pipe is not None:
-        top_limit = next_pipe.syt + TOP_LIMIT_OFFSET_TOP_PX
-    TOP_LIMIT_OFFSET_TOP_PX -= TOP_OFFSET
+    bird_line_pred = (int)(bird_line + bird_velocity * FUTURE_BIRD_MS * BIRD_LINE_P)
 
     with lock:
         GLOBAL_bird_line = bird_line_pred
@@ -152,7 +140,10 @@ def track_vision(self, screen, game_FPS, counter, time_ms):
     
     cv2.line(screen, (0, next_pipe_line), (screen.shape[1], next_pipe_line), (255, 0, 0), 2)
     cv2.line(screen, (0, bird_line_pred), (screen.shape[1], bird_line_pred), (0, 0, 255), 2)
-    cv2.line(screen, (0, top_limit), (screen.shape[1], top_limit), (0, 255, 255), 2)
+
+    # Draw top limit only if we are far from pipe
+    if distance_to_pipe > BIRD_TOP_LIMIT_EXPIRE_PX:
+        cv2.line(screen, (0, top_limit), (screen.shape[1], top_limit), (0, 255, 255), 2)
 
     # Draw where the bird will be if it flaps now
     bird_line_after_flap = bird_line - BIRD_FLAP_DISTANCE_PX
@@ -181,10 +172,11 @@ def take_action():
             time.sleep(0.01)
             continue
 
-        bird_line_after_flap = bird_line - BIRD_FLAP_DISTANCE_PX
-        if bird_line_after_flap < top_limit:
-            time.sleep(0.01)
-            continue
+        if distance_to_pipe > BIRD_TOP_LIMIT_EXPIRE_PX:
+            bird_line_after_flap = bird_line - BIRD_FLAP_DISTANCE_PX
+            if bird_line_after_flap < top_limit:
+                time.sleep(0.01)
+                continue
 
         click()
 
