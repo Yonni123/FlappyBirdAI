@@ -9,6 +9,7 @@ import threading
 import keyboard
 from collections import deque
 from utils import *
+from physics import BirdPhysics
 
 # --- Tuning parameters for the controller ---
 
@@ -36,7 +37,8 @@ MAX_FRAME_VELOCITY_ESTIMATOR = 5
 
 # Number of seconds of cooldown between flaps
 # Otherwise it will flap way too rapidly
-FLAP_COOLDOWN_S = 0.033
+SIM_DELAY = 0.08
+FLAP_COOLDOWN_S = 0.133
 
 # Make the pipe openings "smaller" for safety
 PIPE_OPENING_MARGINS = 25
@@ -53,24 +55,33 @@ TOP_LIMIT_OFFSET_PX = -5  # How many pixels above the pipe opening to set the to
 
 # --------------------------------------------
 
+FLAP_COOLDOWN_S -= SIM_DELAY
+
 vel_est = VelocityEstimator(maxlen=MAX_FRAME_VELOCITY_ESTIMATOR)
 GLOBAL_bird_line = None    # Bird bottom line passed to action thread  (SHARED BETWEEN THREADS)
 GLOBAL_pipe_line = None    # Pipe safe gap bottom passed to action thread  (SHARED BETWEEN THREADS)
 GLOBAL_top_limit = None    # Top limit for bird (SHARED BETWEEN THREADS)
 GLOBAL_distance_to_pipe = None  # Distance to next pipe (SHARED BETWEEN THREADS)
 
+sim_bird = BirdPhysics(gravity=0.545, flap_velocity=-10.1, max_velocity=30)
+
 lock = threading.Lock()
-pyautogui.PAUSE = 0.1
+pyautogui.PAUSE = 0
 playing = False # Global variable to track whether the bot is active
 
 def toggle_playing():
-    global playing
+    global playing, sim_bird
     playing = not playing
+    if playing:
+        sim_bird.reset(y=-100)  # -100 means reset to initial position later
     print("Playing:" if playing else "Paused")
 keyboard.add_hotkey("s", toggle_playing)
 
 def click():
+    global sim_bird
     pyautogui.click()
+    time.sleep(SIM_DELAY)
+    sim_bird.flap()
     time.sleep(FLAP_COOLDOWN_S)
 
 
@@ -89,20 +100,40 @@ def detect_next_pipe(pipes, bird):
     
     return next_pipe
 
+import csv
+file1 = open("bird_velocity.csv", mode="w", newline="")
+file2 = open("sim_bird_v.csv", mode="w", newline="")
+
+writer1 = csv.writer(file1)
+writer2 = csv.writer(file2)
+
+def logg(time_ms, bird_velocity, sim_bird_v):
+    writer1.writerow([time_ms, bird_velocity, sim_bird_v])
+    file1.flush()
+
 
 def track_vision(self, screen, game_FPS, counter, time_ms):
     global vel_est, GLOBAL_bird_line, GLOBAL_pipe_line, GLOBAL_top_limit, GLOBAL_distance_to_pipe
+    global sim_bird
 
     objects, masks = process_frame(screen, safety_margin=PIPE_OPENING_MARGINS)
     if objects is None:
-        raise RuntimeError(
-            "Could not detect floor, please make sure the game is selected.\n"
-            "If the game is selected properly, please tweak the HSV value thresholds (HSV_dict) in vision_system.py"
-        )
+        #raise RuntimeError(
+        #    "Could not detect floor, please make sure the game is selected.\n"
+        #    "If the game is selected properly, please tweak the HSV value thresholds (HSV_dict) in vision_system.py"
+        #)
+        render_frame(screen, None, game_FPS, counter, time_ms)
+        return
     
     floor_y, pipes, bird = objects
     mask = cv2.bitwise_or(masks[0], masks[1])
     screen = draw_screen_info(screen, floor_y, pipes, bird)
+
+    if sim_bird.y == -100:
+        sim_bird.reset(y=bird[1] + bird[3])  # Reset to current bird position
+        sim_bird.flap()  # Give it an initial flap to start moving
+        render_frame(screen, mask, game_FPS, counter, time_ms)
+        return
 
     if not playing:
         render_frame(screen, mask, game_FPS, counter, time_ms)
@@ -110,13 +141,16 @@ def track_vision(self, screen, game_FPS, counter, time_ms):
 
     if bird is None:
         render_frame(screen, mask, game_FPS, counter, time_ms)
-        return    
+        return  
+
+    cv2.circle(screen, (bird[0], bird[1]), 5, (0,255,0), -1)  
     
     next_pipe_line = floor_y - PIPE_OPENING_MARGINS # Default to floor if no pipes
     next_pipe = detect_next_pipe(pipes, bird)
     distance_to_pipe = 0
     top_limit = 0  # Default to 0 if no pipes, 0 is top of screen
     if next_pipe:
+        cv2.circle(screen, (next_pipe.x, next_pipe.syb), 5, (255,0,0), -1)
         next_pipe_line = next_pipe.syb
         birdx = bird[0] + bird[3]
         distance_to_pipe = next_pipe.x - birdx
@@ -125,7 +159,11 @@ def track_vision(self, screen, game_FPS, counter, time_ms):
             top_limit = next_pipe.syb + PIPE_OPENING_MARGINS + TOP_LIMIT_OFFSET_PX
 
     bird_line = bird[1] + bird[3]
+    print(f"{time_ms},{bird_line/2}")
     bird_velocity, _ = vel_est.get_velocity()
+    #print(f"{time_ms},{bird_velocity}")
+    #print(f"{time_ms},{sim_bird.v}")
+    #logg(time_ms, bird_velocity, sim_bird.v)
 
     bird_velocity = min(bird_velocity, (BIRD_SPEED_CAP/1000))
     bird_line_pred = (int)(bird_line + bird_velocity * FUTURE_BIRD_MS * BIRD_LINE_P)
@@ -137,6 +175,12 @@ def track_vision(self, screen, game_FPS, counter, time_ms):
         GLOBAL_top_limit = top_limit
     
     vel_est.update(bird_line/2, time_ms)
+    sim_y = int(sim_bird.update(time_now=None))
+    logg(time_ms, bird_line/2, sim_y)
+
+    # Draw circle where sim bird is
+    cv2.circle(screen, (200, sim_y), 20, (0,255,0), -1)  
+    cv2.putText(screen, f"y={sim_y - (bird_line/2)}", (230, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255,255,255), 2)
     
     cv2.line(screen, (0, next_pipe_line), (screen.shape[1], next_pipe_line), (255, 0, 0), 2)
     cv2.line(screen, (0, bird_line_pred), (screen.shape[1], bird_line_pred), (0, 0, 255), 2)
@@ -184,7 +228,7 @@ def take_action():
 if __name__ == "__main__":
     action_thread = threading.Thread(target=take_action, daemon=True)
     game = GameWrapper(monitor_index=0, trim=True,
-                       game_region={'top': 147, 'left': 33, 'width': 624, 'height': 1114}
+                       game_region={'top': 172, 'left': 49, 'width': 628, 'height': 1121}
     )
     time.sleep(2)
     action_thread.start()
