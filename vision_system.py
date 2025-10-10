@@ -9,19 +9,18 @@ HSV_dict = {
 }
 floor_y = None
 
-def segment_frame(frame, target):
+KERNEL_5 = np.ones((5, 5), np.uint8)
+KERNEL_7 = np.ones((7, 7), np.uint8)
+KERNEL_15 = np.ones((15, 15), np.uint8)
+
+def segment_frame(hsv, target):
     global HSV_dict
     if target not in HSV_dict:
         raise ValueError(f"Target '{target}' not found in HSV_dict")
 
-    kernel = np.ones((5, 5), np.uint8)
-    #frame = cv2.erode(frame, kernel, iterations=1)
-    #frame = cv2.dilate(frame, kernel, iterations=1)
-
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv, HSV_dict[target][0], HSV_dict[target][1])
-    mask = cv2.dilate(mask, kernel, iterations=2)
-    mask = cv2.erode(mask, kernel, iterations=2)
+    mask = cv2.dilate(mask, KERNEL_5, iterations=2)
+    mask = cv2.erode(mask, KERNEL_5, iterations=2)
 
     return mask
 
@@ -77,8 +76,7 @@ def detect_pipes(screen, floor_y):
     mask[floor_y:, :] = 0
 
     # Make the mast a little bigger
-    kernel = np.ones((5, 5), np.uint8)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, KERNEL_5)
     
     #cv2.rectangle(mask, (200, 150), (400, 280), 0, thickness=-1)  #DEBUG
 
@@ -157,15 +155,19 @@ def process_pipes(screen, floor_y, safety_margin=1):
     return connected_pipes, mask
 
 
-def detect_bird(screen):
+def detect_bird(screen, pipe_mask):
     global HSV_dict, floor_y
 
     mask = segment_frame(screen, "outlines")
-    kernel = np.ones((7, 7), np.uint8)
-
-    mask = cv2.erode(mask, kernel, iterations=1)
-    mask = cv2.dilate(mask, kernel, iterations=5)
-    mask = cv2.erode(mask, kernel, iterations=3)
+    # Set half the mask on the right side to 0, bird is always on the left side
+    mask[:, int(mask.shape[1]* 2/5):] = 0
+    # Remove pipe areas from the mask (pipes are 1 in the pipe_mask)
+    # So we should set those areas to 0 in the bird mask
+    pipe_mask_dilated = cv2.dilate(pipe_mask, KERNEL_15, iterations=1)
+    mask[pipe_mask_dilated > 0] = 0
+    # Make everything under the floor black
+    if floor_y is not None:
+        mask[floor_y:, :] = 0
 
     # Crop the sides because pipe outlines might ruin if they are partially visble
     # The bird will never be there anyway
@@ -173,6 +175,10 @@ def detect_bird(screen):
     cut = int(0.1 * w)
     mask[:, :cut] = 0
     mask[:, w-cut:] = 0
+
+    # Dilate and erode to make the bird get together better
+    mask = cv2.dilate(mask, KERNEL_15, iterations=1)
+    mask = cv2.erode(mask, KERNEL_15, iterations=1)
 
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours:
@@ -184,13 +190,14 @@ def detect_bird(screen):
 
     return (x, y, w, h), mask
 
-
+import time
 def process_frame(frame, safety_margin=0):
     global HSV_dict, floor_y
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
     # Detect floor y-position if not already detected
     if floor_y is None:
-        floor_y = detect_floor_y_position(frame, frame.shape[1])
+        floor_y = detect_floor_y_position(hsv, frame.shape[1])
         if floor_y is not None:
             print(f"Detected floor y-position: {floor_y}")
         else:
