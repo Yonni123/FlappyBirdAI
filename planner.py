@@ -1,3 +1,6 @@
+import shared
+import time
+
 # --- Tuning parameters for the controller ---
 
 # How far into the future (ms) we predict the bird's position 
@@ -32,4 +35,11 @@ def detect_next_pipe(pipes, bird):
     return next_pipe
 
 def planner_main():
-    pass  # Placeholder for the main planner function
+    while True:
+        with shared.LOCK:
+            bird_data = shared.BIRD_DATA.copy()
+            time_ms = shared.TIME_MS
+    
+        print("Planner received bird data:", bird_data)
+        print("Planenr time:", time_ms)
+        time.sleep(1)  # Placeholder for actual planning logic

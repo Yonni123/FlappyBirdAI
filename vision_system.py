@@ -190,7 +190,6 @@ def detect_bird(screen, pipe_mask):
 
     return (x, y, w, h), mask
 
-import time
 def process_frame(frame, safety_margin=0):
     global HSV_dict, floor_y
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
@@ -204,7 +203,7 @@ def process_frame(frame, safety_margin=0):
             print("Floor y-position not detected yet.")
             return None, None
         
-    pipes, pipe_mask = process_pipes(frame, floor_y, safety_margin)
-    bird, bird_mask = detect_bird(frame)
+    pipes, pipe_mask = process_pipes(hsv, floor_y, safety_margin)
+    bird, bird_mask = detect_bird(hsv, pipe_mask)
 
     return (floor_y, pipes, bird), (pipe_mask, bird_mask)

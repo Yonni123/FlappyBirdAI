@@ -23,3 +23,5 @@ def action_main():
         if not PLAYING:
             time.sleep(FLAP_COOLDOWN_S)
             continue
+
+        time.sleep(FLAP_COOLDOWN_S) 

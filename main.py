@@ -2,33 +2,36 @@ import sys
 sys.path.insert(1, 'external/FrameHook')
 from frame_hook import GameWrapper
 from vision_system import process_frame, draw_screen_info
-import cv2
 import time
 import threading
 from utils import VelocityEstimator, render_frame
 from planner import planner_main
 from action import action_main
+import shared
 
 VEL_EST = VelocityEstimator(maxlen=5)
-lock = threading.Lock()
-
-BIRD_DATA = {
-    'y': 0,
-    'vy': 0
-}
 
 
 def game_loop(self, screen, game_FPS, counter, time_ms):
     global VEL_EST
     
     # --- Capture game state ---
-    objects, _ = process_frame(screen, safety_margin=0)
+    objects, _ = process_frame(screen, safety_margin=10)
     if objects is None:
+        with shared.LOCK:
+            shared.BIRD_DATA['y'] = None
+            shared.BIRD_DATA['vy'] = None
+            shared.TIME_MS = time_ms
         render_frame(screen, None, game_FPS, counter, time_ms)
         return
     
     floor_y, pipes, bird = objects
     if bird is None:
+        with shared.LOCK:
+            shared.BIRD_DATA['y'] = None
+            shared.BIRD_DATA['vy'] = None
+            shared.PIPES = None
+            shared.TIME_MS = time_ms
         render_frame(screen, None, game_FPS, counter, time_ms)
         return
     
@@ -37,10 +40,12 @@ def game_loop(self, screen, game_FPS, counter, time_ms):
     VEL_EST.update(bird_y, time_ms)
     bird_vel, _ = VEL_EST.get_velocity()
 
-    # --- Update shared bird data ---
-    with lock:
-        BIRD_DATA['y'] = bird_y
-        BIRD_DATA['vy'] = bird_vel
+    # --- Update shared data ---
+    with shared.LOCK:
+        shared.BIRD_DATA['y'] = bird_y
+        shared.BIRD_DATA['vy'] = bird_vel
+        shared.PIPES = pipes
+        shared.TIME_MS = time_ms
 
     # --- Render frame with info ---
     screen = draw_screen_info(screen, floor_y, pipes, bird)
