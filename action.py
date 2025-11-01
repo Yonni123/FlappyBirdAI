@@ -22,9 +22,10 @@ def flap():
         if bird_pos is not None:
             bird_x = bird_pos[0] + bird_pos[2] // 2
             bird_y = bird_pos[1] + bird_pos[3] // 2
+            bird_x += shared.GLOBAL_X
 
             parabola = Parabola()
-            parabola.fit_to_point(bird_x, bird_y, shared.CONSTANTS['ttp'], shared.TIME_MS)
+            parabola.fit_to_point(bird_x, bird_y, shared.CONSTANTS['ttp'])
 
             shared.PARABOLAS.append(parabola)
     

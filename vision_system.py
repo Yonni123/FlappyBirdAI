@@ -180,7 +180,7 @@ def process_pipes(screen, floor_y, safety_margin=1):
         connected_pipes.append(pipe(x1, y1, w1, (y2 + h2) - y1, syt, syb))
 
     with shared.LOCK:
-        prev_pipes = shared.PIPES
+        prev_pipes = shared.PIPES.copy()
     final_pipes = assign_pipe_ids(prev_pipes, connected_pipes)
 
     return final_pipes, mask
