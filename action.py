@@ -2,6 +2,7 @@ import keyboard
 import pyautogui
 import time
 import shared
+from utils import Parabola
 
 
 PLAYING = False # Global variable to track whether the bot is active
@@ -22,13 +23,10 @@ def flap():
             bird_x = bird_pos[0] + bird_pos[2] // 2
             bird_y = bird_pos[1] + bird_pos[3] // 2
 
-            py = bird_y
-            px = bird_x / shared.CONSTANTS['PIPE_SPEED']
+            parabola = Parabola()
+            parabola.fit_to_point(bird_x, bird_y, shared.CONSTANTS['ttp'], shared.TIME_MS)
 
-            h = px + shared.CONSTANTS['ttp']
-            k = py - shared.CONSTANTS['a'] * (shared.CONSTANTS['ttp'] ** 2)
-
-            shared.PARABOLA_COEFFS.append({'k': k, 'h': h, 'start': shared.TIME_MS})
+            shared.PARABOLAS.append(parabola)
     
     pyautogui.click()
 

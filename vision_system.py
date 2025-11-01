@@ -137,9 +137,6 @@ def assign_pipe_ids(prev_pipes, curr_pipes):
                 best_match = prev
                 best_dx = dx
 
-        if best_match is not None:
-            print(f"Best match found! {best_dx}, {threshold}")
-
         if best_match and best_dx <= threshold and best_match.id != 0:
             curr.id = best_match.id # Reuse previous pipe's ID
         else:

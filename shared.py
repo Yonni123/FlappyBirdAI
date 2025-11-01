@@ -19,7 +19,7 @@ GLOBAL_X = 0
 #    {'t': 12760, 'flap': True},   # at time 12.76s, flap again
 #    {'t': 13200, 'flap': False},  # coast until next flap
 PATH = []  # Placeholder for planned path data
-PARABOLA_COEFFS = []
+PARABOLAS = []
 
 CONSTANTS = {
     'a': 0.00116,   # parabola constant (affects shape of jump which should be constant)

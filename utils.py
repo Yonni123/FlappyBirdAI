@@ -43,72 +43,67 @@ class pipe:
         self.id = 0 # Will be reassigned later...
 
 
-def plot_parabola(screen, a, k, h, time_s, time_now, color=(0, 0, 0), thickness=2):
-    height, width, _ = screen.shape
+class Parabola:
+    # f(t)=a(t−h)^2+k and a is a constant found in shared.py
+    # s is the start time since parabola is moving in time as well
+    def __init__(self):
+        self.h = 0
+        self.k = 0
+        self.t = 0
 
-    if h is None or k is None:
-        return screen
+    # h = Px + ttp  (ttp can be both + or - depending on point of intersection)
+    # k = Py ​− a * ttp^2
+    # if we want it to pass through point (P_x, P_y) at the point that is X away from vertex
+    # Since point Px and Py is moving to the left by PIPE_SPEED amount, we need to record the time
+    # of the fit we just did, so that we can move it dynamically later by comapring with current time
+    def fit_to_point(self, px, py, ttp, timestamp):
+        px /= shared.CONSTANTS['PIPE_SPEED']    # Convert px in terms of time
 
-    # Generate on-screen x values
-    x = np.arange(0, width)
+        h = px + ttp
+        k = py - shared.CONSTANTS['a'] * (ttp ** 2)
 
-    delta_t = time_now - time_s
+        self.h = h
+        self.k = k
+        self.t = timestamp  # When we did the fit
 
-    # Convert them to t values (time) based on pipe speed
-    t = x / shared.CONSTANTS['PIPE_SPEED'] + delta_t
+    def draw(self, canvas, time_now, color=(0, 0, 0)):
+        if self.h == 0 or self.k == 0 or self.t == 0:
+            print("Fit parabola before drawing!")
+            return canvas
+        
+        height, width, _ = canvas.shape
 
-    y = a * (t - h)**2 + k
+        # Generate on-screen x values
+        x = np.arange(0, width)
 
-    points = np.array([
-        [int(xi), int(yi)]
-        for xi, yi in zip(x, y)
-        if 0 <= yi < height
-    ])
+        delta_t = time_now - self.t   # Measure how much it moved
 
-    # Draw the parabola if it is on the screen coordinates
-    if len(points) > 1:
-        cv2.polylines(screen, [points], isClosed=False, color=color, thickness=2)
+        # Convert them to t values (time) based on pipe speed and add delta
+        t = x / shared.CONSTANTS['PIPE_SPEED'] + delta_t
 
-    return screen
+        # Generate Y values
+        y = shared.CONSTANTS['a'] * (t - self.h)**2 + self.k
 
-cur_x = 0
-last_t = 0
+        points = np.array([
+            [int(xi), int(yi)]
+            for xi, yi in zip(x, y)
+            if 0 <= yi < height
+        ])
+
+        # Draw the parabola if it is on the screen coordinates
+        if len(points) > 1:
+            cv2.polylines(canvas, [points], isClosed=False, color=color, thickness=2)
+
+        return canvas
+
+
 def render_frame(screen, mask, game_FPS, counter, time_ms):
-    global cur_x, last_t
     # Plot parabola for testing for now
     with shared.LOCK:
-        parabs = shared.PARABOLA_COEFFS
-        pipe_speed = shared.CONSTANTS['PIPE_SPEED'] # px/s
+        parabs = shared.PARABOLAS
         time_now = shared.TIME_MS
-    for para in parabs:
-        screen = plot_parabola(screen,
-                           shared.CONSTANTS['a'],
-                           para['k'],
-                           para['h'],
-                           para['start'],
-                           time_now)
-        
-    if last_t == 0:
-        last_t = time_ms
-        return
-        
-    # Draw a vertical line to estimate the pipe speed
-    if cur_x <= 0:
-        # Initialize cur_x as the first detected pipe's x
-        cur_x = screen.shape[1]  # reset to screen width
-
-    # Update cur_x based on pipe speed and frame time
-    dt =  time_ms - last_t
-    cur_x -= pipe_speed * dt
-    last_t = time_ms
-
-    # Draw the line at the current pipe position
-    cv2.line(screen,
-             (int(cur_x), 0),
-             (int(cur_x), screen.shape[0]),
-             color=(0, 0, 255), thickness=2)
-
-        
+    for p in parabs:
+        screen = p.draw(screen, time_now)
 
     cv2.setWindowTitle("GameFrame", f"Game FPS: {game_FPS:.2f} |\
                         Frame Counter: {counter:.0f} | Time (ms): {time_ms:.0f}")
