@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 from utils import pipe
+import shared
 
 # GLOBALS
 HSV_dict = {
@@ -30,7 +31,7 @@ def draw_screen_info(frame, floor_y, pipes, bird=None):
         x, y, w, h = p.x, p.y, p.w, p.h
         # Draw bounding boxes
         cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 255), 4)
-        cv2.putText(frame, f"({x},{p.syb})", (x, p.syb - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+        cv2.putText(frame, f"({x},{p.syb}) {p.id}", (x, p.syb - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
         # Draw safe zones
         cv2.line(frame, (x, p.syt), (x + w, p.syt), (0, 0, 255), 4)
         cv2.line(frame, (x, p.syb), (x + w, p.syb), (0, 0, 255), 4)
@@ -118,6 +119,36 @@ def group_pipes_by_x(pipes, x_tolerance=20):
     return groups
 
 
+def assign_pipe_ids(prev_pipes, curr_pipes):
+    speed = shared.CONSTANTS['PIPE_SPEED']
+    threshold = speed * 1000    # one second
+
+    # Figure out the next available ID
+    used_ids = [p.id for p in prev_pipes if p.id is not None]
+    next_id = max(used_ids, default=-1)
+
+    for curr in curr_pipes:
+        best_match = None
+        best_dx = float('inf')
+
+        for prev in prev_pipes:
+            dx = abs(curr.x - prev.x)
+            if dx < best_dx:
+                best_match = prev
+                best_dx = dx
+
+        if best_match is not None:
+            print(f"Best match found! {best_dx}, {threshold}")
+
+        if best_match and best_dx <= threshold and best_match.id != 0:
+            curr.id = best_match.id # Reuse previous pipe's ID
+        else:
+            next_id += 1
+            curr.id = next_id   # Assign a new unique ID
+
+    return curr_pipes
+
+
 # Create a list of pipes by detecting and connecting segments
 def process_pipes(screen, floor_y, safety_margin=1):
     pipes, mask = detect_pipes(screen, floor_y)
@@ -151,8 +182,11 @@ def process_pipes(screen, floor_y, safety_margin=1):
         # Create pipe object
         connected_pipes.append(pipe(x1, y1, w1, (y2 + h2) - y1, syt, syb))
 
+    with shared.LOCK:
+        prev_pipes = shared.PIPES
+    final_pipes = assign_pipe_ids(prev_pipes, connected_pipes)
 
-    return connected_pipes, mask
+    return final_pipes, mask
 
 
 def detect_bird(screen, pipe_mask):

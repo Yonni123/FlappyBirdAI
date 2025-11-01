@@ -53,7 +53,6 @@ def planner_main():
 
         next_pipe = detect_next_pipe(pipes, bird_data['AABB'])
         if next_pipe is not None:
-            print(f"Next pipe at x={next_pipe.x}.")
 
             # --- Dummy pipe speed calculation ---
             if prev_pipe_x is not None and prev_time_ms is not None:
@@ -61,7 +60,6 @@ def planner_main():
                 dt = time_ms - prev_time_ms         # milliseconds elapsed
                 if dt > 0:
                     pipe_speed = dx / dt            # px/ms
-                    print(f"Estimated pipe speed: {pipe_speed:.3f} px/ms")
             # Update previous measurements
             prev_pipe_x = next_pipe.x
             prev_time_ms = time_ms

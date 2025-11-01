@@ -40,6 +40,7 @@ class pipe:
         self.syt = syt
         self.syb = syb
         self.center = (x + w // 2, y + h // 2)
+        self.id = 0 # Will be reassigned later...
 
 
 def plot_parabola(screen, a, k, h, time_s, time_now, color=(0, 0, 0), thickness=2):
@@ -79,7 +80,6 @@ def render_frame(screen, mask, game_FPS, counter, time_ms):
         parabs = shared.PARABOLA_COEFFS
         pipe_speed = shared.CONSTANTS['PIPE_SPEED'] # px/s
         time_now = shared.TIME_MS
-        print(f"GLOBAL X: {shared.GLOBAL_X}")
     for para in parabs:
         screen = plot_parabola(screen,
                            shared.CONSTANTS['a'],

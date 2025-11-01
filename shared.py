@@ -24,5 +24,5 @@ PARABOLA_COEFFS = []
 CONSTANTS = {
     'a': 0.00116,   # parabola constant (affects shape of jump which should be constant)
     'ttp': 296, # Time to peak (jump to highest point) in ms. How long it takes to reach the highest point of the jump from the moment of flap
-    'PIPE_SPEED': 0.2615,     # pixels per second in X direction
+    'PIPE_SPEED': 0.2615,     # pixels per ms in X direction
 }
