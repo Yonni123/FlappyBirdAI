@@ -19,19 +19,24 @@ def game_loop(self, screen, game_FPS, counter, time_ms):
     objects, _ = process_frame(screen, safety_margin=10)
     if objects is None:
         with shared.LOCK:
-            shared.BIRD_DATA['y'] = None
+            shared.BIRD_DATA['AABB'] = None 
             shared.BIRD_DATA['vy'] = None
+            shared.PIPES = []
+            dt = time_ms - shared.TIME_MS
             shared.TIME_MS = time_ms
+            shared.GLOBAL_X += shared.CONSTANTS['PIPE_SPEED'] * dt
         render_frame(screen, None, game_FPS, counter, time_ms)
         return
     
     floor_y, pipes, bird = objects
     if bird is None:
         with shared.LOCK:
-            shared.BIRD_DATA['y'] = None
+            shared.BIRD_DATA['AABB'] = None
             shared.BIRD_DATA['vy'] = None
-            shared.PIPES = None
+            shared.PIPES = []
+            dt = time_ms - shared.TIME_MS
             shared.TIME_MS = time_ms
+            shared.GLOBAL_X += shared.CONSTANTS['PIPE_SPEED'] * dt
         render_frame(screen, None, game_FPS, counter, time_ms)
         return
     
@@ -42,10 +47,12 @@ def game_loop(self, screen, game_FPS, counter, time_ms):
 
     # --- Update shared data ---
     with shared.LOCK:
-        shared.BIRD_DATA['y'] = bird_y
+        shared.BIRD_DATA['AABB'] = bird 
         shared.BIRD_DATA['vy'] = bird_vel
         shared.PIPES = pipes
+        dt = time_ms - shared.TIME_MS
         shared.TIME_MS = time_ms
+        shared.GLOBAL_X += shared.CONSTANTS['PIPE_SPEED'] * dt
 
     # --- Render frame with info ---
     screen = draw_screen_info(screen, floor_y, pipes, bird)

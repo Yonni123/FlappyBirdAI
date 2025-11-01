@@ -35,11 +35,37 @@ def detect_next_pipe(pipes, bird):
     return next_pipe
 
 def planner_main():
+    print("Planner thread started")
+    prev_pipe_x = None
+    prev_time_ms = None
     while True:
         with shared.LOCK:
             bird_data = shared.BIRD_DATA.copy()
             time_ms = shared.TIME_MS
-    
-        print("Planner received bird data:", bird_data)
-        print("Planenr time:", time_ms)
-        time.sleep(1)  # Placeholder for actual planning logic
+            pipes = shared.PIPES
+
+        if bird_data['AABB'] is None or bird_data['vy'] is None or pipes is None:
+            time.sleep(0.1)
+            continue
+        if len(pipes) == 0:
+            time.sleep(0.1)
+            continue
+
+        next_pipe = detect_next_pipe(pipes, bird_data['AABB'])
+        if next_pipe is not None:
+            print(f"Next pipe at x={next_pipe.x}.")
+
+            # --- Dummy pipe speed calculation ---
+            if prev_pipe_x is not None and prev_time_ms is not None:
+                dx = prev_pipe_x - next_pipe.x      # pixels moved since last measurement
+                dt = time_ms - prev_time_ms         # milliseconds elapsed
+                if dt > 0:
+                    pipe_speed = dx / dt            # px/ms
+                    print(f"Estimated pipe speed: {pipe_speed:.3f} px/ms")
+            # Update previous measurements
+            prev_pipe_x = next_pipe.x
+            prev_time_ms = time_ms
+            # -------------------------------------
+        else:
+            print("No next pipe detected, len: ", len(pipes))
+        time.sleep(0.01)
