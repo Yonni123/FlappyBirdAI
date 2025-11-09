@@ -2,6 +2,8 @@ import threading
 
 LOCK = threading.Lock()
 
+PLAYING = False
+
 BIRD_DATA = {
     'AABB': None,
     'vy': None

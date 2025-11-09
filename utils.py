@@ -46,9 +46,13 @@ class pipe:
 class Parabola:
     # f(x)=a(x−h)^2+k and a is a constant found in shared.py
     # s is the start time since parabola is moving in time as well
-    def __init__(self):
-        self.h = 0
-        self.k = 0
+    def __init__(self, h=0, k=0, c=(0, 0, 0)):
+        self.h = h
+        self.k = k
+        self.c = c  # Color for drawing
+
+    def get_y(self, x):
+        return shared.CONSTANTS['a'] * (x - self.h)**2 + self.k
 
     # h = Px + ttp  (ttp can be both + or - depending on point of intersection)
     # k = Py ​− a * ttp^2
@@ -79,7 +83,7 @@ class Parabola:
 
         return x, y
 
-    def draw(self, canvas, global_x=0, x_range=None, color=(0, 0, 0)):
+    def draw(self, canvas, global_x=0, x_range=None, color=None):
         if self.h == 0 or self.k == 0:
             print("Fit parabola before drawing!")
             return canvas
@@ -105,6 +109,8 @@ class Parabola:
 
         # Draw parabola
         if len(points) > 1:
+            if color is None:
+                color = self.c
             cv2.polylines(canvas, [points], isClosed=False, color=color, thickness=2)
 
         return canvas
@@ -128,15 +134,10 @@ def render_frame(screen, mask, game_FPS, counter, time_ms):
         if result is None:
             continue  # no intersection
 
-        print(f"Found intersection: {result}")
-
         x, y = result
         x -= global_x
 
-        print("DRAWING: ", x, y)
-
         # Draw intersection as a small red circle
-        print(screen.shape)
         if 0 <= x < screen.shape[1] and 0 <= y < screen.shape[0]:
             cv2.circle(screen, (int(x), int(y)), radius=5, color=(0, 0, 255), thickness=-1)
 

@@ -4,45 +4,46 @@ import time
 import shared
 from utils import Parabola
 
-
-PLAYING = False # Global variable to track whether the bot is active
 FLAP_COOLDOWN_S = 0.15
 pyautogui.PAUSE = FLAP_COOLDOWN_S
 
+
 def toggle_playing():
-    global PLAYING
-    PLAYING = not PLAYING
-    print("Playing:" if PLAYING else "Paused")
+    shared.PLAYING = not shared.PLAYING
+    print("Playing:" if shared.PLAYING else "Paused")
 keyboard.add_hotkey("s", toggle_playing)
 
-def flap():
-    # Calculate k and h so that the parabola passes through the bird's current position
-    with shared.LOCK:
-        bird_pos = shared.BIRD_DATA['AABB']
-        if bird_pos is not None:
-            bird_x = bird_pos[0] + bird_pos[2] // 2
-            bird_y = bird_pos[1] + bird_pos[3] // 2
-            bird_x += shared.GLOBAL_X
-
-            parabola = Parabola()
-            parabola.fit_to_point(bird_x, bird_y, shared.CONSTANTS['ttp'])
-
-            shared.PARABOLAS.append(parabola)
-    
-    pyautogui.click()
+def flap():  
+    pass  
+    #pyautogui.click()
 
 def action_main():
     while True:
-        if not PLAYING:
+        if not shared.PLAYING:
             time.sleep(FLAP_COOLDOWN_S)
             continue
 
-        flap()  # Initial flap to start the game
-        time.sleep(FLAP_COOLDOWN_S)
+        prev_bird_world_x = None
+        while shared.PLAYING:
+            with shared.LOCK:
+                bird_pos = shared.BIRD_DATA.get('AABB')
+                parabolas = list(shared.PARABOLAS)
+                global_x = shared.GLOBAL_X
 
-        while PLAYING:
-            # Some kind of logic here
-            time.sleep(FLAP_COOLDOWN_S) 
+            if bird_pos is None:
+                time.sleep(FLAP_COOLDOWN_S)
+                prev_bird_world_x = None
+                continue
 
-            time.sleep(0.3)
-            flap()
+            # bird center in world coordinates
+            bird_x = bird_pos[0] + bird_pos[2] // 2
+            bird_world_x = bird_x + global_x
+
+            # iterate parabolas and flap when bird crosses their h (intersection) from left to right
+            for p in parabolas:
+                if prev_bird_world_x is not None and prev_bird_world_x < p.h <= bird_world_x:
+                    flap()
+                    break
+
+            prev_bird_world_x = bird_world_x
+            time.sleep(FLAP_COOLDOWN_S)
