@@ -4,8 +4,8 @@ import time
 import shared
 from utils import Parabola
 
-FLAP_COOLDOWN_S = 0.15
-pyautogui.PAUSE = FLAP_COOLDOWN_S
+FLAP_COOLDOWN_S = 0.05
+pyautogui.PAUSE = 0
 
 
 def toggle_playing():
@@ -13,9 +13,8 @@ def toggle_playing():
     print("Playing:" if shared.PLAYING else "Paused")
 keyboard.add_hotkey("s", toggle_playing)
 
-def flap():  
-    pass  
-    #pyautogui.click()
+def flap():
+    pyautogui.click()
 
 def action_main():
     while True:
@@ -25,25 +24,39 @@ def action_main():
 
         prev_bird_world_x = None
         while shared.PLAYING:
+            time_s = time.time()
             with shared.LOCK:
                 bird_pos = shared.BIRD_DATA.get('AABB')
                 parabolas = list(shared.PARABOLAS)
                 global_x = shared.GLOBAL_X
 
+            time_elapsed = time.time() - time_s
+            if time_elapsed < FLAP_COOLDOWN_S:
+                time.sleep(FLAP_COOLDOWN_S - time_elapsed)
+
+            if parabolas is None or len(parabolas) < 2: # Need at least two parabolas to find intersection
+                print("No parabolas available")
+                continue
+
             if bird_pos is None:
-                time.sleep(FLAP_COOLDOWN_S)
                 prev_bird_world_x = None
+                print("No bird position available")
                 continue
 
             # bird center in world coordinates
-            bird_x = bird_pos[0] + bird_pos[2] // 2
-            bird_world_x = bird_x + global_x
+            bird_world_x = shared.CONSTANTS['BIRD_X'] + global_x
+            bird_y = bird_pos[1] + bird_pos[3] // 2
 
-            # iterate parabolas and flap when bird crosses their h (intersection) from left to right
-            for p in parabolas:
-                if prev_bird_world_x is not None and prev_bird_world_x < p.h <= bird_world_x:
-                    flap()
-                    break
+            # intersection
+            x_inter, y_inter = parabolas[0].get_intersection(parabolas[1])
+            if x_inter is None:
+                print("No intersection found")
+                continue
+            
+            tolerance = 63  # pixels
+            print(x_inter - bird_world_x)
+            if x_inter - bird_world_x < tolerance:
+                flap()
+                with shared.LOCK:
+                    shared.PARABOLAS.pop(0)
 
-            prev_bird_world_x = bird_world_x
-            time.sleep(FLAP_COOLDOWN_S)

@@ -44,12 +44,15 @@ class pipe:
 
 
 class Parabola:
+    _counter = 0
     # f(x)=a(x−h)^2+k and a is a constant found in shared.py
     # s is the start time since parabola is moving in time as well
     def __init__(self, h=0, k=0, c=(0, 0, 0)):
         self.h = h
         self.k = k
         self.c = c  # Color for drawing
+        self.id = Parabola._counter
+        Parabola._counter += 1
 
     def get_y(self, x):
         return shared.CONSTANTS['a'] * (x - self.h)**2 + self.k
@@ -71,7 +74,8 @@ class Parabola:
 
         # Avoid division by zero (identical h)
         if self.h == other.h:
-            return None
+            print("No intersection: identical h values")
+            return None, None
         
         a = shared.CONSTANTS['a']
 
@@ -113,6 +117,19 @@ class Parabola:
                 color = self.c
             cv2.polylines(canvas, [points], isClosed=False, color=color, thickness=2)
 
+        # Put the ID text near the vertex
+        vertex_x = int(self.h - global_x)
+        vertex_y = int(self.k)
+        if 0 <= vertex_x < width and 0 <= vertex_y < height:
+            cv2.putText(canvas, f"ID:{self.id}", (vertex_x + 5, vertex_y - 5),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            
+        # Draw point ppt away from vertex
+        #ppt_x = int(self.h - shared.CONSTANTS['ttp'] - global_x)
+        #ppt_y = int(self.get_y(self.h - shared.CONSTANTS['ttp']))
+        #if 0 <= ppt_x < width and 0 <= ppt_y < height:
+        #    cv2.circle(canvas, (ppt_x, ppt_y), radius=4, color=(0, 255, 255), thickness=-1)
+
         return canvas
 
 
@@ -130,11 +147,10 @@ def render_frame(screen, mask, game_FPS, counter, time_ms):
         p1 = parabs[i]
         p2 = parabs[i + 1]
 
-        result = p1.get_intersection(p2)
-        if result is None:
+        x, y = p1.get_intersection(p2)
+        if x is None:
             continue  # no intersection
 
-        x, y = result
         x -= global_x
 
         # Draw intersection as a small red circle
